@@ -1,5 +1,5 @@
 %Exercice 1 :
-
+% Déclarer les faits dynamiques pour les arbres, les rochers, les vaches et Dimitri
 % 1.
 :- dynamic arbre/2.
 :- dynamic rocher/2.
@@ -10,11 +10,11 @@
 % 3.
 :- dynamic dimitri/2.
 
-% 4.
+% 4. Définir la largeur et la hauteur de lenvironnement
 largeur(15).
 hauteur(7).
 
-% 5.
+% 5. Définir le nombre de rochers, arbres et vaches par race
 nombre_rochers(2).
 nombre_arbres(3).
 nombre_vaches(brune, 2).
@@ -22,93 +22,145 @@ nombre_vaches(simmental, 4).
 nombre_vaches(alpine_herens, 5).
 
 %Exercice 2:
-
-% 1.
+% 1. Vérifier si une case est occupée
 occupe(X, Y) :- arbre(X, Y); rocher(X, Y); vache(X, Y, _, _); dimitri(X, Y).
 
-% 2.
-libre(X, Y):- repeat, random(0, 5, X), random(0, 5, Y), not(occupe(X, Y)), !.
+% 2. Vérifier si une case est libre
+libre(X, Y):- largeur(L), hauteur(H), repeat, random(0, L, X), random(0, H, Y), not(occupe(X, Y)), !.
 
-% 3.
+% 3. Placer aléatoirement un certain nombre de rochers, arbres, vaches et Dimitri sur des cases libres
 placer_rochers(N) :- N1 is N - 1, N1 >= 0, libre(X, Y), assert(rocher(X, Y)).
 placer_arbres(N) :- N1 is N - 1, N1 >= 0, libre(X, Y), assert(arbre(X, Y)).
 placer_vaches(Race, N) :- N1 is N - 1, N1 >= 0, libre(X, Y), assert(vache(X, Y, Race, vivante)).
 placer_dimitri :- libre(X, Y), assert(dimitri(X, Y)).
-vaches(L) :- findall([X,Y], vache(X, Y, _, _), L).
-creer_zombie :- vaches(L), random_member(V, L), [X | R] = V, [Y | _] = R, retract(vache(X, Y, _, _)), assert(vache(X, Y, brune, zombie)).
+
+% 4. Trouver toutes les vaches vivantes et les vaches zombies
+vaches(L):-findall((X,Y),vache(X,Y,_,_),L).
+vaches_zombies(L):-findall((X,Y),vache(X,Y,_,zombie),L).
+
+% 5. Choisir une vache au hasard pour la transformer en zombie
+vache_alea([], []).
+vache_alea(L, [X,Y]):-length(L, S),
+                      I is random(S),
+                      nth0(I, L, (X,Y)).
+creer_zombie:-vaches(L),
+              vache_alea(L,[X,Y]),
+              retract(vache(X,Y,Race,vivante)),
+              assert(vache(X,Y,Race,zombie)).
 
 %Exercice 3:
-
-% 1.
+% 1. Demander à lutilisateur dans quelle direction déplacer Dimitri
 question(R) :- write('Dans quelle direction souhaitez vous deplacer Dimitri? (reste/nord/sud/est/ouest)'), nl, read(R).
 
-% 2.
-zombification :-
-    findall((X,Y), vache(X, Y, _, zombie), Zombies),
-    maplist(zombifier_voisins, Zombies).
+% 2. Vérifier si une vache est morte et la transformer en zombie si cest le cas
+morte(X,Y):-vache(X,Y,_,zombie).
+zombification(X,Y):-X1 is X-1,
+                  morte(X1,Y),
+                  retract(vache(X,Y,Race,vivante)),
+                  assert(vache(X,Y,Race,zombie)),
+                  !.
+zombification(X,Y):-X1 is X+1,
+                  morte(X1,Y),
+                  retract(vache(X,Y,Race,vivante)),
+                  assert(vache(X,Y,Race,zombie)),
+                  !.
+zombification(X,Y):-Y1 is Y-1,
+                  morte(X,Y1),
+                  retract(vache(X,Y,Race,vivante)),
+                  assert(vache(X,Y,Race,zombie)),
+                  !.
+zombification(X,Y):-Y1 is Y+1,
+                  morte(X,Y1),
+                  retract(vache(X,Y,Race,vivante)),
+                  assert(vache(X,Y,Race,zombie)),
+                  !.
+zombification(_,_).
+zombification([]).
+zombification([(X,Y)|L]):-zombification(X,Y),
+                          zombification(L).
+zombification:-vaches(L),zombification(L).
 
-zombifier_voisins((X, Y)) :-
-    zombifier(X-1, Y),
-    zombifier(X+1, Y),
-    zombifier(X, Y-1),
-    zombifier(X, Y+1).
+% 3. Déplacer aléatoirement les vaches dans différentes directions
+deplacement_alea(L,M):-length(L, S),
+                      I is random(S),
+                      nth0(I,L,M).
+deplacement_vache([]).
+deplacement_vache([(X,Y)|L]):-deplacement_alea([reste,east,est,nord,sud],M),
+                              deplacement_vache(X,Y,M),
+                              deplacement_vache(L).
+deplacement_vaches:-vaches(L),
+                    deplacement_vache(L).
+deplacement_vache(X,Y, nord):-Y>0,
+                              Y1 is Y-1,
+                              not(occupe(X,Y1)),
+                              retract(vache(X,Y,Race,Etat)),
+                              assert(vache(X,Y1,Race,Etat)),
+                              !.
+deplacement_vache(X,Y, sud):-hauteur(H),
+                            Y<H-1,Y1 is Y+1,
+                            not(occupe(X,Y1)),
+                            retract(vache(X,Y,Race,Etat)),
+                            assert(vache(X,Y1,Race,Etat)),
+                            !.
+deplacement_vache(X,Y, ouest):-X>0,
+                              X1 is X-1,
+                              not(occupe(X1,Y)),
+                              retract(vache(X,Y,Race,Etat)),
+                              assert(vache(X1,Y,Race,Etat)),
+                              !.
+deplacement_vache(X,Y,est):-largeur(L),
+                            X<L-1,
+                            X1 is X+1,
+                            not(occupe(X1,Y)),
+                            retract(vache(X,Y,Race,Etat)),
+                            assert(vache(X1,Y,Race,Etat)),
+                            !.
+deplacement_vache(_,_,_).
 
-zombifier(X, Y) :-
-    retract(vache(X, Y, _, _)),
-    assert(vache(X, Y, brune, zombie)).
-zombifier(_, _).
+% 4. Déplacer le joueur Dimitri dans les différentes directions
+deplacement_joueur(nord):-dimitri(X,Y),
+                          Y>0,
+                          Y1 is Y-1,
+                          not(occupe(X,Y1)),
+                          retract(dimitri(X,Y)),
+                          assert(dimitri(X,Y1)),
+                          !.
+deplacement_joueur(sud):-dimitri(X,Y),
+                        hauteur(H),
+                        Y<H-1,
+                        Y1 is Y+1,
+                        not(occupe(X,Y1)),
+                        retract(dimitri(X,Y)),
+                        assert(dimitri(X,Y1)),
+                        !.
+deplacement_joueur(ouest):-dimitri(X,Y),
+                          X>0,
+                          X1 is X-1,
+                          not(occupe(X1,Y)),
+                          retract(dimitri(X,Y)),
+                          assert(dimitri(X1,Y)),
+                          !.
+deplacement_joueur(est):-dimitri(X,Y),
+                        largeur(L),
+                        X<L-1,
+                        X1 is X+1,
+                        not(occupe(X1,Y)),
+                        retract(dimitri(X,Y)),
+                        assert(dimitri(X1,Y)),
+                        !.
+deplacement_joueur(_).
 
-
-% 3.
-deplacement_vache(X, Y, Direction) :-
-    nouvelle_position(X, Y, Direction, X1, Y1),
-    inside_bounds(X1, Y1),
-    not(occupe(X1, Y1)),
-    vache(X, Y, Race, Etat),
-    retract(vache(X, Y, Race, Etat)),
-    assert(vache(X1, Y1, Race, Etat)).
-
-nouvelle_position(X, Y, reste, X, Y).
-nouvelle_position(X, Y, nord, X, Y+1).
-nouvelle_position(X, Y, sud, X, Y-1).
-nouvelle_position(X, Y, est, X+1, Y).
-nouvelle_position(X, Y, ouest, X-1, Y).
-
-inside_bounds(X, Y) :-
-    largeur(L),
-    hauteur(H),
-    X >= 0, X < L,
-    Y >= 0, Y < H.
-
-deplacement_vaches:- vaches(L), maplist(tenter_deplacer, L).
-
-tenter_deplacer((X, Y)) :-
-    direction_aleatoire(D),
-    deplacement_vache(X, Y, D).
-
-direction_aleatoire(Direction) :-
-    random_member(Direction, [reste, nord, sud, est, ouest]).
-
-% 4.
-deplacement_joueur(Direction) :-
-    dimitri(X, Y),
-    nouvelle_position(X, Y, Direction, X1, Y1),
-    inside_bounds(X1, Y1),
-    not(occupe(X1, Y1)),
-    retract(dimitri(X, Y)),
-    assert(dimitri(X1, Y1)).
-
-% 5.
-verification :-
-    dimitri(X, Y),
-    not(voisin_zombie(X, Y)).
-
-voisin_zombie(X, Y) :-
-    (   vache(X-1, Y, _, zombie) ;
-        vache(X+1, Y, _, zombie) ;
-        vache(X, Y-1, _, zombie) ;
-        vache(X, Y+1, _, zombie) ).
-
+% 5. Vérifier les positions autour de Dimitri pour les vaches non-zombies
+verification(X,Y):-dimitri(X,Y),
+              X1 is X+1,
+              not(vache(X1,Y,_,zombie)),
+              X2 is X-1,
+              not(vache(X2,Y,_,zombie)),
+              Y1 is Y+1,
+              not(vache(X,Y1,_,zombie)),
+              Y2 is Y-1,
+              not(vache(X,Y2,_,zombie)).
+verification:-verification(_,_).
 
 % le reste est le code prédéfini du jeu
 
